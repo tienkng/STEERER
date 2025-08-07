@@ -13,7 +13,7 @@ network = dict(
     sigma = [4],
     gau_kernel_size = 15,
     baseline_loss = False,
-    pretrained_backbone="../PretrainedModels/hrnetv2_w48_imagenet_pretrained.pth",
+    pretrained_backbone="/home/tiennv/FPT/yolov9/STEERER/PretrainedModels/hrnetv2_w48_imagenet_pretrained.pth",
     
     head = dict(
         type='CountingHead',
@@ -26,15 +26,14 @@ network = dict(
 
 dataset = dict(
     name='SHHB',
-    root='../ProcessedData/SHHB/',
+    root=None,
     test_set='test.txt',
     train_set='train.txt',
-    loc_gt = 'test_gt_loc.txt',
+    loc_gt = None,
     num_classes= len(network['resolution_num']),
     den_factor=100,
     extra_train_set =None
 )
-
 
 optimizer = dict(
     NAME='adamw',
@@ -95,9 +94,10 @@ test = dict(
     patch_batch_size=16,
     flip_test=False,
     multi_scale=False,
-
+    SCALE_LIST=[1.0],
     model_file = ''
 )
+
 
 CUDNN = dict(
     BENCHMARK= True,

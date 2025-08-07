@@ -1,0 +1,7 @@
+gg drive: https://drive.google.com/drive/folders/1F2Z7QLPe8sNVaglCSRLEHf90ATOaYtIZ
+
+pc1:
+/home/tiennv/FPT/yolov9/counting_people/STEERER/STEERER/weights_onnx/model.onnx
+/home/tiennv/FPT/yolov9/counting_people/STEERER/STEERER/PretrainedModels/hrnetv2_w48_imagenet_pretrained.pth
+/home/tiennv/FPT/yolov9/counting_people/STEERER/STEERER/PretrainedModels/SHHB_mae_5.8_mse_8.5.pth
+

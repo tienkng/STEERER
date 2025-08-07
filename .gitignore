@@ -7,9 +7,18 @@ job/
 exp/
 scale_generalization/
 .vscode/
+__pycache__/
+*.pyc
 
 
 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
 [user]
 	name = taohan10200
 	email = hantao10200@gmail.com
+
+
+
+onnx_output/
+PretrainedModels/
+ProcessedData/
+weights_onnx/

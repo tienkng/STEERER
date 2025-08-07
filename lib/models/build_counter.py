@@ -5,7 +5,7 @@ from lib.models.backbones.backbone_selector import BackboneSelector
 from lib.models.heads.head_selector import  HeadSelector
 from lib.models.heads.moe import upsample_module
 from lib.utils.Gaussianlayer import Gaussianlayer
-
+import logging
 class UncertaintyLoss(nn.Module):
 
     def __init__(self, v_num):
@@ -32,7 +32,7 @@ def freeze_model(model):
     for (name, param) in model.named_parameters():
             param.requires_grad = False
 
-
+logger = logging.getLogger(__name__)
 class Baseline_Counter(nn.Module):
     def __init__(self, config=None,weight=200, route_size=(64,64),device=None):
         super(Baseline_Counter, self).__init__()
@@ -62,7 +62,178 @@ class Baseline_Counter(nn.Module):
         self.label_start = self.resolution_num[0]
         self.label_end = self.resolution_num[-1]+1
 
-    def forward(self,inputs, labels=None, mode='train'):
+    # def forward(self,inputs, labels=None, mode='train'):
+    #     if self.config.counter_type == 'single_resolution':
+    #         x_list = self.backbone(inputs)
+    #         x0_h, x0_w = x_list[0].size(2), x_list[0].size(3)
+    #         y = [x_list[0]]
+    #         for i in range(1, len(x_list)):
+    #             y.append(F.upsample(x_list[i], size=(x0_h, x0_w), mode='bilinear'))
+    #         y = torch.cat(y, 1)
+
+    #         outputs = self.count_head(y)
+
+    #         # used for flops calculating and model testing
+    #         if labels is None:
+    #             return  outputs
+
+    #         labels = labels[0].unsqueeze(1)
+    #         labels =  self.gaussian(labels)
+
+    #         if mode =='train' or mode =='val':
+    #             loss = self.mse_loss(outputs, labels*self.weight)
+    #             gt_cnt = labels.sum().item()
+    #             pre_cnt = outputs.sum().item()/self.weight
+
+    #             result = {
+    #                 'x4': {'gt': gt_cnt, 'error':max(0, gt_cnt-abs(gt_cnt-pre_cnt))},
+    #                 'x8': {'gt': 0, 'error': 0},
+    #                 'x16': {'gt': 0, 'error': 0},
+    #                 'x32': {'gt': 0, 'error': 0},
+    #                 'acc1': {'gt': 0, 'error': 0},
+    #                 'losses':loss,
+    #                 'pre_den':
+    #                     {
+    #                         '1':outputs/self.weight,
+    #                      },
+
+    #                 'gt_den':{'1':labels}
+
+    #             }
+    #             return  result
+
+    #         elif mode == 'test':
+    #             return outputs / self.weight
+
+
+    #     elif self.config.counter_type == 'withMOE':
+    #         result = {'pre_den':{},'gt_den':{}}
+    #         in_list = self.backbone(inputs)
+    #         self.counter_copy.load_state_dict(self.multi_counters.state_dict())
+    #         freeze_model(self.counter_copy)
+
+    #         in_list = in_list[self.resolution_num[0]:self.resolution_num[-1]+1]
+
+    #         out_list =self.upsample_module(in_list,self.multi_counters,self.counter_copy)
+    #         # import pdb
+    #         # pdb.set_trace()
+
+    #         if labels is None:
+    #             return  out_list
+
+    #         label_list = []
+
+    #         labels = labels[self.label_start:self.label_end]
+
+    #         for i, label in enumerate(labels):
+    #             label_list.append(self.gaussian(label.unsqueeze(1))*self.weight)
+
+    #         # moe_label,score_gt = self.get_moe_label(out_list, label_list, (64,64))
+
+    #         # import numpy as np
+    #         # import cv2
+    #         # import pdb
+    #         # pred_color_map= moe_label.cpu().numpy()
+    #         # np.save('./exp/moe/{}.npy'.format(moe_label.size(2)),pred_color_map)
+    #         # pred_color_map = cv2.applyColorMap(
+    #         #     (255 * pred_color_map / (pred_color_map.max() + 1e-10)).astype(np.uint8).squeeze(), cv2.COLORMAP_JET)
+    #         # cv2.imwrite('./exp/moe/moe_label_{}.png'.format(moe_label.size(2)), pred_color_map)
+    #         # pdb.set_trace()
+
+    #         if mode =='val':
+    #             result.update({'losses':self.mse_loss(out_list[0],label_list[0])})
+    #             result['pre_den'].update({'1': out_list[0]/self.weight})
+    #             result['pre_den'].update({'2': out_list[-3]/self.weight})
+    #             result['pre_den'].update({'4': out_list[-2]/self.weight})
+    #             result['pre_den'].update({'8': out_list[-1]/self.weight})
+
+    #             result['gt_den'].update({'1': label_list[0]/self.weight})
+    #             result['gt_den'].update({'2': label_list[-3]/self.weight})
+    #             result['gt_den'].update({'4': label_list[-2]/self.weight})
+    #             result['gt_den'].update({'8': label_list[-1]/self.weight})
+    #             return result
+
+    #         moe_label,score_gt = self.get_moe_label(out_list, label_list, self.route_size)
+
+    #         mask_gt = torch.zeros_like(score_gt)
+
+    #         if mode =='train' or mode =='val':
+    #             mask_gt = mask_gt.scatter_(1,moe_label, 1)
+
+    #         loss_list = []
+    #         outputs = torch.zeros_like(out_list[0])
+    #         label_patch = torch.zeros_like(label_list[0])
+
+    #         result.update({'acc1': {'gt':0, 'error':0}})
+
+    #         # import pdb
+    #         # pdb.set_trace()
+    #         mask_add = torch.ones_like(mask_gt[:,0].unsqueeze(1))
+    #         for i in range(mask_gt.size(1)):
+
+    #             kernel = (int(self.route_size[0] / (2 ** i)), int(self.route_size[1] / (2 ** i)))
+    #             loss_mask = F.upsample_nearest(mask_add,   size=(out_list[i].size()[2:]))
+    #             hard_loss=self.mse_loss(out_list[i]*loss_mask,label_list[i]*loss_mask)
+    #             loss_list.append(hard_loss)
+
+    #             # import pdb
+    #             # pdb.set_trace()
+
+    #             if i == 0:
+    #                 label_patch += (label_list[0] * F.upsample_nearest(mask_gt[:,i].unsqueeze(1),
+    #                                                        size=(out_list[i].size()[2:])))
+    #                 label_patch = F.unfold(label_patch, kernel,  stride=kernel)
+    #                 B_, _, L_ = label_patch.size()
+    #                 label_patch = label_patch.transpose(2, 1).view(B_, L_, kernel[0], kernel[1])
+    #             else:
+    #                 gt_slice  = F.unfold(label_list[i], kernel,stride=kernel)
+    #                 B, KK, L = gt_slice.size()
+
+    #                 pick_gt_idx = (moe_label.flatten(start_dim=1) == i).unsqueeze(2).unsqueeze(3)
+    #                 gt_slice = gt_slice.transpose(2,1).view(B, L,kernel[0], kernel[1])
+    #                 pad_w, pad_h =(self.route_size[1] - kernel[1])//2, (self.route_size[0] - kernel[0])//2
+    #                 gt_slice = F.pad(gt_slice, [pad_w,pad_w,pad_h,pad_h], "constant", 0.2)
+    #                 gt_slice = (gt_slice * pick_gt_idx)
+    #                 label_patch += gt_slice
+
+    #             gt_cnt = (label_list[i]*loss_mask).sum().item()/self.weight
+    #             pre_cnt = (out_list[i]*loss_mask).sum().item()/self.weight
+    #             result.update({f"x{2**(self.resolution_num[i]+2)}": {'gt': gt_cnt,
+    #                                         'error':max(0, gt_cnt-abs(gt_cnt-pre_cnt))}})
+    #             mask_add -=mask_gt[:,i].unsqueeze(1)
+
+    #         B_num, C_num, H_num, W_num =  out_list[0].size()
+    #         patch_h, patch_w = H_num // self.route_size[0], W_num // self.route_size[1]
+    #         label_patch =label_patch.view(B_num, patch_h*patch_w, -1).transpose(1,2)
+    #         label_patch = F.fold(label_patch, output_size=(H_num, W_num), kernel_size=self.route_size, stride=self.route_size)
+
+    #         if mode =='train' or mode =='val':
+    #             loss = 0
+    #             if self.config.baseline_loss:
+    #                 loss = loss_list[0]
+    #             else:
+    #                 for i in range(len(self.resolution_num)):
+    #                     # if self.config.loss_weight:
+    #                     loss +=loss_list[i]*self.config.loss_weight[i]
+    #                     # else:
+    #                     #     loss += loss_list[i] /(2**(i))
+
+    #             for i in ['x4','x8','x16', 'x32']:
+    #                 if i not in result.keys():
+    #                     result.update({i: {'gt': 0, 'error': 0}})
+    #             result.update({'moe_label':moe_label})
+    #             result.update({'losses':torch.unsqueeze(loss,0)})
+    #             result['pre_den'].update({'1':out_list[0]/self.weight})
+    #             result['pre_den'].update({'8': out_list[-1]/self.weight})
+    #             result['gt_den'].update({'1': label_patch/self.weight})
+    #             result['gt_den'].update({'8': label_list[-1]/self.weight})
+
+    #             return result
+
+    #         elif mode == 'test':
+
+    #             return outputs / self.weight
+    def forward(self, inputs, labels=None, mode='train'):
         if self.config.counter_type == 'single_resolution':
             x_list = self.backbone(inputs)
             x0_h, x0_w = x_list[0].size(2), x_list[0].size(3)
@@ -73,167 +244,134 @@ class Baseline_Counter(nn.Module):
 
             outputs = self.count_head(y)
 
-            # used for flops calculating and model testing
+            # Used for flops calculating and model testing
             if labels is None:
-                return  outputs
+                return outputs
 
             labels = labels[0].unsqueeze(1)
-            labels =  self.gaussian(labels)
+            labels = self.gaussian(labels)
 
-            if mode =='train' or mode =='val':
-                loss = self.mse_loss(outputs, labels*self.weight)
+            if mode == 'train' or mode == 'val':
+                loss = self.mse_loss(outputs, labels * self.weight)
                 gt_cnt = labels.sum().item()
-                pre_cnt = outputs.sum().item()/self.weight
+                pre_cnt = outputs.sum().item() / self.weight
 
                 result = {
-                    'x4': {'gt': gt_cnt, 'error':max(0, gt_cnt-abs(gt_cnt-pre_cnt))},
+                    'x4': {'gt': gt_cnt, 'error': max(0, gt_cnt - abs(gt_cnt - pre_cnt))},
                     'x8': {'gt': 0, 'error': 0},
                     'x16': {'gt': 0, 'error': 0},
                     'x32': {'gt': 0, 'error': 0},
                     'acc1': {'gt': 0, 'error': 0},
-                    'losses':loss,
-                    'pre_den':
-                        {
-                            '1':outputs/self.weight,
-                         },
-
-                    'gt_den':{'1':labels}
-
+                    'losses': loss,
+                    'pre_den': {'1': outputs / self.weight},
+                    'gt_den': {'1': labels}
                 }
-                return  result
+                return result
 
             elif mode == 'test':
                 return outputs / self.weight
 
-
         elif self.config.counter_type == 'withMOE':
-            result = {'pre_den':{},'gt_den':{}}
+            result = {'pre_den': {}, 'gt_den': {}}
             in_list = self.backbone(inputs)
             self.counter_copy.load_state_dict(self.multi_counters.state_dict())
             freeze_model(self.counter_copy)
 
             in_list = in_list[self.resolution_num[0]:self.resolution_num[-1]+1]
+            out_list = self.upsample_module(in_list, self.multi_counters, self.counter_copy)
 
-            out_list =self.upsample_module(in_list,self.multi_counters,self.counter_copy)
-            # import pdb
-            # pdb.set_trace()
-
-            if labels is None:
-                return  out_list
-
-            label_list = []
+            # Handle labels=None case for ONNX export or testing
+            if labels is None or mode == 'test':
+                return out_list  # Return predictions only
 
             labels = labels[self.label_start:self.label_end]
+            label_list = []
 
             for i, label in enumerate(labels):
-                label_list.append(self.gaussian(label.unsqueeze(1))*self.weight)
+                label_list.append(self.gaussian(label.unsqueeze(1)) * self.weight)
 
-            # moe_label,score_gt = self.get_moe_label(out_list, label_list, (64,64))
-
-            # import numpy as np
-            # import cv2
-            # import pdb
-            # pred_color_map= moe_label.cpu().numpy()
-            # np.save('./exp/moe/{}.npy'.format(moe_label.size(2)),pred_color_map)
-            # pred_color_map = cv2.applyColorMap(
-            #     (255 * pred_color_map / (pred_color_map.max() + 1e-10)).astype(np.uint8).squeeze(), cv2.COLORMAP_JET)
-            # cv2.imwrite('./exp/moe/moe_label_{}.png'.format(moe_label.size(2)), pred_color_map)
-            # pdb.set_trace()
-
-            if mode =='val':
-                result.update({'losses':self.mse_loss(out_list[0],label_list[0])})
-                result['pre_den'].update({'1': out_list[0]/self.weight})
-                result['pre_den'].update({'2': out_list[-3]/self.weight})
-                result['pre_den'].update({'4': out_list[-2]/self.weight})
-                result['pre_den'].update({'8': out_list[-1]/self.weight})
-
-                result['gt_den'].update({'1': label_list[0]/self.weight})
-                result['gt_den'].update({'2': label_list[-3]/self.weight})
-                result['gt_den'].update({'4': label_list[-2]/self.weight})
-                result['gt_den'].update({'8': label_list[-1]/self.weight})
+            if mode == 'val':
+                if not label_list:  # Check if label_list is empty
+                    logger.warning("label_list is empty in 'val' mode, returning predictions only")
+                    return out_list
+                result.update({'losses': self.mse_loss(out_list[0], label_list[0])})
+                result['pre_den'].update({'1': out_list[0] / self.weight})
+                result['pre_den'].update({'2': out_list[-3] / self.weight})
+                result['pre_den'].update({'4': out_list[-2] / self.weight})
+                result['pre_den'].update({'8': out_list[-1] / self.weight})
+                result['gt_den'].update({'1': label_list[0] / self.weight})
+                result['gt_den'].update({'2': label_list[-3] / self.weight})
+                result['gt_den'].update({'4': label_list[-2] / self.weight})
+                result['gt_den'].update({'8': label_list[-1] / self.weight})
                 return result
 
-            moe_label,score_gt = self.get_moe_label(out_list, label_list, self.route_size)
-
+            moe_label, score_gt = self.get_moe_label(out_list, label_list, self.route_size)
             mask_gt = torch.zeros_like(score_gt)
 
-            if mode =='train' or mode =='val':
-                mask_gt = mask_gt.scatter_(1,moe_label, 1)
+            if mode == 'train' or mode == 'val':
+                mask_gt = mask_gt.scatter_(1, moe_label, 1)
 
             loss_list = []
             outputs = torch.zeros_like(out_list[0])
             label_patch = torch.zeros_like(label_list[0])
+            result.update({'acc1': {'gt': 0, 'error': 0}})
 
-            result.update({'acc1': {'gt':0, 'error':0}})
-
-            # import pdb
-            # pdb.set_trace()
-            mask_add = torch.ones_like(mask_gt[:,0].unsqueeze(1))
+            mask_add = torch.ones_like(mask_gt[:, 0].unsqueeze(1))
             for i in range(mask_gt.size(1)):
-
                 kernel = (int(self.route_size[0] / (2 ** i)), int(self.route_size[1] / (2 ** i)))
-                loss_mask = F.upsample_nearest(mask_add,   size=(out_list[i].size()[2:]))
-                hard_loss=self.mse_loss(out_list[i]*loss_mask,label_list[i]*loss_mask)
+                loss_mask = F.upsample_nearest(mask_add, size=(out_list[i].size()[2:]))
+                hard_loss = self.mse_loss(out_list[i] * loss_mask, label_list[i] * loss_mask)
                 loss_list.append(hard_loss)
 
-                # import pdb
-                # pdb.set_trace()
-
                 if i == 0:
-                    label_patch += (label_list[0] * F.upsample_nearest(mask_gt[:,i].unsqueeze(1),
-                                                           size=(out_list[i].size()[2:])))
-                    label_patch = F.unfold(label_patch, kernel,  stride=kernel)
+                    label_patch += (label_list[0] * F.upsample_nearest(mask_gt[:, i].unsqueeze(1),
+                                                                        size=(out_list[i].size()[2:])))
+                    label_patch = F.unfold(label_patch, kernel, stride=kernel)
                     B_, _, L_ = label_patch.size()
                     label_patch = label_patch.transpose(2, 1).view(B_, L_, kernel[0], kernel[1])
                 else:
-                    gt_slice  = F.unfold(label_list[i], kernel,stride=kernel)
+                    gt_slice = F.unfold(label_list[i], kernel, stride=kernel)
                     B, KK, L = gt_slice.size()
-
                     pick_gt_idx = (moe_label.flatten(start_dim=1) == i).unsqueeze(2).unsqueeze(3)
-                    gt_slice = gt_slice.transpose(2,1).view(B, L,kernel[0], kernel[1])
-                    pad_w, pad_h =(self.route_size[1] - kernel[1])//2, (self.route_size[0] - kernel[0])//2
-                    gt_slice = F.pad(gt_slice, [pad_w,pad_w,pad_h,pad_h], "constant", 0.2)
+                    gt_slice = gt_slice.transpose(2, 1).view(B, L, kernel[0], kernel[1])
+                    pad_w, pad_h = (self.route_size[1] - kernel[1]) // 2, (self.route_size[0] - kernel[0]) // 2
+                    gt_slice = F.pad(gt_slice, [pad_w, pad_w, pad_h, pad_h], "constant", 0.2)
                     gt_slice = (gt_slice * pick_gt_idx)
                     label_patch += gt_slice
 
-                gt_cnt = (label_list[i]*loss_mask).sum().item()/self.weight
-                pre_cnt = (out_list[i]*loss_mask).sum().item()/self.weight
+                gt_cnt = (label_list[i] * loss_mask).sum().item() / self.weight
+                pre_cnt = (out_list[i] * loss_mask).sum().item() / self.weight
                 result.update({f"x{2**(self.resolution_num[i]+2)}": {'gt': gt_cnt,
-                                            'error':max(0, gt_cnt-abs(gt_cnt-pre_cnt))}})
-                mask_add -=mask_gt[:,i].unsqueeze(1)
+                                                                    'error': max(0, gt_cnt - abs(gt_cnt - pre_cnt))}})
+                mask_add -= mask_gt[:, i].unsqueeze(1)
 
-            B_num, C_num, H_num, W_num =  out_list[0].size()
+            B_num, C_num, H_num, W_num = out_list[0].size()
             patch_h, patch_w = H_num // self.route_size[0], W_num // self.route_size[1]
-            label_patch =label_patch.view(B_num, patch_h*patch_w, -1).transpose(1,2)
+            label_patch = label_patch.view(B_num, patch_h * patch_w, -1).transpose(1, 2)
             label_patch = F.fold(label_patch, output_size=(H_num, W_num), kernel_size=self.route_size, stride=self.route_size)
 
-            if mode =='train' or mode =='val':
+            if mode == 'train' or mode == 'val':
                 loss = 0
                 if self.config.baseline_loss:
                     loss = loss_list[0]
                 else:
                     for i in range(len(self.resolution_num)):
-                        # if self.config.loss_weight:
-                        loss +=loss_list[i]*self.config.loss_weight[i]
-                        # else:
-                        #     loss += loss_list[i] /(2**(i))
+                        loss += loss_list[i] * self.config.loss_weight[i]
 
-                for i in ['x4','x8','x16', 'x32']:
+                for i in ['x4', 'x8', 'x16', 'x32']:
                     if i not in result.keys():
                         result.update({i: {'gt': 0, 'error': 0}})
-                result.update({'moe_label':moe_label})
-                result.update({'losses':torch.unsqueeze(loss,0)})
-                result['pre_den'].update({'1':out_list[0]/self.weight})
-                result['pre_den'].update({'8': out_list[-1]/self.weight})
-                result['gt_den'].update({'1': label_patch/self.weight})
-                result['gt_den'].update({'8': label_list[-1]/self.weight})
+                result.update({'moe_label': moe_label})
+                result.update({'losses': torch.unsqueeze(loss, 0)})
+                result['pre_den'].update({'1': out_list[0] / self.weight})
+                result['pre_den'].update({'8': out_list[-1] / self.weight})
+                result['gt_den'].update({'1': label_patch / self.weight})
+                result['gt_den'].update({'8': label_list[-1] / self.weight})
 
                 return result
 
             elif mode == 'test':
-
-                return outputs / self.weight
-
+                return out_list
 
     def get_moe_label(self, out_list, label_list, route_size):
         """

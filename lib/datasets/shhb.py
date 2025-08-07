@@ -10,11 +10,12 @@ from torch.nn import functional as F
 import random
 from .base_dataset import BaseDataset
 from .nwpu import NWPU
+import glob
 
 class SHHB(NWPU):
     def __init__(self,
                  root,
-                 list_path,
+                 list_path=None,
                  num_samples=None,
                  num_classes=1,
                  multi_scale=True,
@@ -45,51 +46,37 @@ class SHHB(NWPU):
             scale_factor,
             mean,
             std)
-    # def gen_sample(self, image, points,
-    #                multi_scale=True, is_flip=True, center_crop_test=False):
-    #
-    #     if multi_scale:
-    #         scale_factor = 0.5 + random.randint(0, self.scale_factor) / 10.0
-    #         a = np.arange(0.7,1, 0.01)
-    #         b = np.arange(1,1.5, 0.015)
-    #         scale_factor= random.choice(np.concatenate([a,b],0))
-    #         # scale_factor = random.uniform(self.rate_range[0], self.rate_range[1])
-    #         # a = np.arange(0.25,1,0.05)
-    #         # scale_factor= random.choice(np.concatenate([a,1/a],0))
-    #
-    #         image, points = self.crop_then_scale(image, points, scale_factor)
-    #
-    #
-    #
-    #
-    #     image = self.input_transform(image)
-    #     label = self.label_transform(points, image.shape[:2])
-    #
-    #     image = image.transpose((2, 0, 1))
-    #
-    #     if is_flip:
-    #         flip = np.random.choice(2) * 2 - 1
-    #         image = image[:, :, ::flip]
-    #         for i in range(len(label)):
-    #             label[i] = label[i][:, ::flip].copy()
-    #
-    #
-    #     return image, label
+        
     def read_files(self):
-        box_gt_Info = self.read_box_gt(os.path.join(self.root, 'val_gt_loc.txt'))
         files = []
-        if 'test'in self.list_path:
-            for item in self.img_list:
-                image_id = item[0]
+        if self.list_path is None:
+            # Quét trực tiếp thư mục root
+            image_extensions = ['*.jpg', '*.jpeg', '*.png']
+            image_list = []
+            for ext in image_extensions:
+                image_list.extend(glob.glob(os.path.join(self.root, ext)))
+            
+            if not image_list:
+                raise ValueError(f"No images found in {self.root}")
+            
+            image_list.sort()
+            for img_path in image_list:
+                image_id = os.path.basename(img_path)
                 files.append({
-                    "img": 'images/' + image_id + '.jpg',
-                    "label": 'jsons/' + image_id + '.json',
-                    "name": image_id,
+                    "img": image_id,
+                    "label": None,
+                    "name": os.path.splitext(image_id)[0],
+                    "weight": 1
                 })
         else:
+            # Logic cũ: đọc từ list_path
+            val_gt_path = os.path.join(self.root, 'val_gt_loc.txt')
+            if os.path.exists(val_gt_path):
+                box_gt_Info = self.read_box_gt(val_gt_path)
+            else:
+                box_gt_Info = []
+            
             for item in self.img_list:
-                # import pdb
-                # pdb.set_trace()
                 image_id = item[0]
                 if 'val' in self.list_path:
                     self.box_gt.append(box_gt_Info[int(image_id)])
