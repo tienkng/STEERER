@@ -7,3 +7,8 @@ dict_recursive_update
 yacs>=0.1.5
 tensorboardX==2.6.2
 fvcore
+
+# onnx export
+onnx
+onnxruntime
+onnx-simplifier
